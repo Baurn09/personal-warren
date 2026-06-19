@@ -1,0 +1,215 @@
+# Personal Warren — configuration
+# Phase 1 uses the universe / paths / ingest / data_quality / news sections.
+# The remaining sections are read from Phase 2 onward.
+
+universe:
+  name: "NIFTY 500"
+  constituents_url: "https://nsearchives.nseindia.com/content/indices/ind_nifty500list.csv"
+
+paths:
+  database: "data/warren.db"
+  raw_snapshots: "data/raw"
+
+ingest:
+  price_history_years: 6
+  yfinance_suffix: ".NS"          # NSE tickers on yfinance are SYMBOL.NS
+  request_timeout_seconds: 30
+  request_delay_seconds: 0.5      # politeness delay between per-stock calls
+
+data_quality:
+  staleness_limit_days:
+    prices: 5
+    fundamentals: 120
+    news: 14
+  reconciliation_tolerance_pct: 5.0   # max % disagreement allowed between sources
+  # Missing a REQUIRED metric -> the stock fails the gate (data is unusable).
+  required_fundamentals:
+    - revenue
+    - net_profit
+  # Missing an EXPECTED metric -> warn only. The stock is still usable; Phase 2
+  # scoring decides per sector whether a given gap is fatal (e.g. banks have no
+  # meaningful total_debt; loss-makers have no PE).
+  expected_fundamentals:
+    - total_debt
+    - roe
+    - pe
+
+news:
+  feeds:
+    moneycontrol: "https://www.moneycontrol.com/rss/business.xml"
+    economic_times: "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"
+    mint: "https://www.livemint.com/rss/markets"
+
+# ─── used from Phase 2 onward ───
+scoring:
+  weights:
+    quality: 20
+    moat: 20
+    financial_strength: 20
+    management: 15
+    valuation: 15
+    growth: 10
+
+funnel:
+  # The monthly shortlist size — was 40 under the long-term mode; tighter under
+  # the 1-month Quality + Momentum pivot.
+  shortlist_size: 15
+
+portfolio:
+  max_holdings: 15
+  single_stock_cap_pct: 10
+  sector_cap_pct: 30
+  cash_reserve_pct: [10, 20]
+  rebalance: monthly       # was quarterly under the long-term mode
+
+benchmark:
+  primary: "NIFTY 50 TRI"
+  secondary: "NIFTY 500 TRI"
+
+# ─── Phase 3 — AI agents (OpenRouter) ───
+ai:
+  base_url: "https://openrouter.ai/api/v1/chat/completions"
+  # Model IDs change often — verify current free models at
+  # https://openrouter.ai/models?q=free  and update if a call 404s.
+  # The judge may be set to a cheap paid model for stronger synthesis.
+  models:
+    specialist: "openai/gpt-oss-120b:free"
+    judge: "openai/gpt-oss-120b:free"
+  temperature: 0.3
+  max_tokens: 900
+  request_timeout_seconds: 120
+  max_retries: 4
+  retry_backoff_seconds: 12         # free tier is aggressively rate-limited
+  delay_between_calls_seconds: 2    # gentle pacing between API calls
+  token_budget_per_run: 800000      # safety cap — abort the run if exceeded
+  stop_after_consecutive_errors: 3  # circuit breaker — likely the daily limit
+
+# ─── Legacy: long-term margin-of-safety advisor (DORMANT under the pivot) ───
+# Kept in tree for reference; not invoked by the monthly pipeline. The active
+# advisor is `monthly_advisor:` below.
+advisor:
+  base_pe: 12.0                 # fair P/E for a no-growth, average business
+  growth_pe_factor: 0.45        # extra fair P/E per 1% of earnings growth
+  max_growth_considered: 30.0   # cap the growth input (avoid runaway multiples)
+  quality_premium:
+    strong: 5.0                 # added when avg(quality, moat) >= 75
+    decent: 2.0                 # added when avg(quality, moat) >= 60
+  fair_pe_bounds: [9.0, 32.0]   # clamp the fair P/E to this range
+  # Cyclical sectors trade on peak/trough earnings — TTM EPS overstates fair
+  # value, so cap their fair P/E low and flag the call as low-confidence.
+  cyclical_sectors: ["Energy", "Basic Materials", "Utilities"]
+  cyclical_fair_pe_cap: 13.0
+  desired_margin_of_safety: 0.10   # target a 10% discount to fair value
+  verdict_bands:
+    undervalued_above: 0.15     # fair value >= 15% above price -> Undervalued
+    overvalued_below: -0.15     # fair value <= 15% below price -> Overvalued
+  # A model-vs-market gap this large on a liquid stock almost always means the
+  # model is fooled (peak/one-off earnings) -> "Investigate", not "Buy Now".
+  max_credible_mos: 0.55
+  near_high_threshold: 0.85     # price-position above this = near the 3y high
+  price_history_years: 3
+
+# ─── Phase 4 — Momentum signals + monthly funnel ───
+momentum:
+  windows:
+    one_month_days: 21         # ~21 trading days per month
+    six_months_days: 126
+    twelve_months_days: 252
+    high_52w_days: 252
+    ma_short_days: 50
+    ma_long_days: 200
+    rsi_period: 14
+    atr_period: 14
+    volume_short_days: 20
+    volume_long_days: 60
+    vol_short_days: 21         # realised volatility windows
+    vol_long_days: 63
+  # Weights for the combined sector-relative momentum score (must sum to 1.0).
+  rank_weights:
+    mom_12_1: 0.45             # primary — 12m return minus most recent 1m
+    mom_6m: 0.20
+    dist_52w_high: 0.20        # closer to (or above) the 52-week high is better
+    volume_trend: 0.15         # confirming volume
+  # Hard filters applied BEFORE ranking (stocks failing these are dropped).
+  filters:
+    require_trend: true        # close > SMA50 > SMA200
+    rsi_ceiling: 80            # drop names with RSI(14) above this
+  # Quality filter: a stock must clear this bar to be momentum-ranked.
+  quality_floor:
+    categories: [quality, moat, financial_strength]
+    score_percentile: 0.50     # keep the top 50% of the gated universe
+
+# ─── Phase 4 — Monthly advisor (Take / Hold / Skip + entry / stop / target) ───
+monthly_advisor:
+  desired_holding_days: 21
+  stop_loss:
+    fixed_pct: 0.07            # tighter of -7% or entry - atr_multiple x ATR
+    atr_multiple: 1.5
+  target:
+    fixed_pct: 0.12            # smaller of +12% or entry + stdev_multiple x stdev
+    stdev_multiple: 1.5
+  position_sizing:
+    method: atr_risk_parity    # weights inverse to ATR, capped per stock & sector
+
+# ─── Phase 6 — Monthly scheduler + learning loop ───
+scheduler:
+  # APScheduler cron — fires once a month. Defaults are tuned to India:
+  # 1st of every month at 06:30 IST (before Indian market open at 09:15).
+  timezone: "Asia/Kolkata"
+  monthly_cron:
+    day: "1"
+    hour: "6"
+    minute: "30"
+  # Phase ordering for the in-process monthly job. Toggle any step to false to
+  # skip it (e.g. set briefs to false if the OpenRouter quota is exhausted).
+  steps:
+    pipeline:   false           # data ingest is slow; expect a separate run
+    scoring:    true
+    briefs:     true
+    review:     true
+
+# ─── Company Analyzer — name-driven single-company deep-dive ───
+# Standalone tool (independent of the funnel): take a company name, fetch its
+# data on demand plus a few live sector peers, and estimate the expected return
+# a small investor can earn over 1m / 6m / 12m / 5y as Bear/Base/Bull scenario
+# bands. Python computes every number; the AI only narrates.
+company_analysis:
+  # Horizon -> trading-day count (~21 trading days per month, ~252 per year).
+  horizons:
+    "1m": 21
+    "6m": 126
+    "12m": 252
+    "5y": 1260
+  scenario:
+    bear_percentile: 0.20      # downside band = 20th percentile of outcomes
+    base_percentile: 0.50      # central / expected = median
+    bull_percentile: 0.80      # upside band = 80th percentile
+    z_band: 0.84              # z-score matching the 80/20 band for the vol model
+  # Blend weights per horizon (empirical + fundamental must sum to 1.0). Short
+  # horizons lean on the company's own return distribution + momentum; the long
+  # horizon leans on the fundamental decomposition.
+  blend:
+    "1m":  {empirical: 0.90, fundamental: 0.10}
+    "6m":  {empirical: 0.70, fundamental: 0.30}
+    "12m": {empirical: 0.50, fundamental: 0.50}
+    "5y":  {empirical: 0.15, fundamental: 0.85}
+  # Fundamental expected-return decomposition: earnings growth + dividend yield
+  # + valuation re-rating toward a sector-median PE.
+  fundamental:
+    growth_cap: 0.25           # clamp annual earnings/revenue growth input
+    default_div_yield: 0.012   # used when dividend yield is missing
+    pe_rerating_years: 5.0     # amortise the PE gap over this many years
+    pe_rerating_cap: 0.10      # cap the annual re-rating contribution at +/-10%
+    sector_median_pe_fallback: 22.0
+  momentum_tilt:
+    max_shift: 0.04            # max +/- shift to the 1-month base from 12-1 momentum
+  swing:
+    horizon_days: 21           # 1-month swing window for the path simulation
+  peers:
+    sample_size: 12            # how many sector peers to compare against
+    min_for_relative: 5        # below this, fall back to absolute quality scoring
+  min_history_days: 252        # below this, estimates are flagged low-confidence
+  notional_rupees: 100000      # example investment used for the rupee earnings view
+  news_items: 8
+  ai:
+    mode: lite                 # lite (one brief) | deep (Bull/Bear/Value/Growth debate)

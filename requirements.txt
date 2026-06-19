@@ -1,0 +1,23 @@
+# ──────────────────────────────────────────────────────────
+# Personal Warren — Python dependencies
+# Phase 1 (data pipeline) deps are active below.
+# Uncomment the Phase 2+ block when you reach that phase.
+# ──────────────────────────────────────────────────────────
+
+# Phase 1 — data pipeline
+pandas>=2.0
+numpy>=1.24
+yfinance>=0.2.40
+nsepython>=2.9
+requests>=2.31
+feedparser>=6.0
+PyYAML>=6.0
+streamlit>=1.30
+
+# Phase 4 — monthly Quality-Momentum pipeline & scheduling
+APScheduler>=3.10
+
+# Phase 2 / dormant — long-term advisor & multi-agent debate live here
+# sentence-transformers>=2.2
+# faiss-cpu>=1.7
+# PyPortfolioOpt>=1.5

@@ -1,0 +1,60 @@
+# Sector scoring configuration.
+#
+# Each scoring template maps the 6 score categories to the metrics that feed
+# them. Metrics are scored as sector-relative percentiles, so direction matters:
+# `higher` = a bigger value is better, `lower` = a smaller value is better.
+
+metric_direction:
+  roe: higher
+  roa: higher
+  net_margin: higher
+  operating_margin: higher
+  gross_margin: higher
+  revenue_growth: higher
+  earnings_growth: higher
+  current_ratio: higher
+  cash_conversion: higher
+  promoter_holding: higher
+  fcf: higher
+  pe: lower
+  price_to_book: lower
+  ev_ebitda: lower
+  debt_to_equity: lower
+
+# Which metrics feed each category, per template.
+templates:
+  General:
+    quality:            [roe, roa, net_margin, operating_margin]
+    moat:               [gross_margin, roe, operating_margin]
+    financial_strength: [debt_to_equity, current_ratio, fcf]
+    management:         [roe, promoter_holding, cash_conversion]
+    valuation:          [pe, price_to_book, ev_ebitda]
+    growth:             [revenue_growth, earnings_growth]
+  Financials:
+    # Banks / NBFCs: no meaningful gross margin, FCF, EV/EBITDA or current ratio.
+    # (NIM, GNPA, CASA, CAR need a bank-data source — added in a later phase.)
+    quality:            [roe, roa, net_margin]
+    moat:               [roe, operating_margin]
+    financial_strength: [debt_to_equity, roa]
+    management:         [roe, promoter_holding]
+    valuation:          [pe, price_to_book]
+    growth:             [revenue_growth, earnings_growth]
+
+classification:
+  # An industry / sector containing one of these substrings -> Financials.
+  financial_keywords:
+    - bank
+    - nbfc
+    - financ
+    - insurance
+    - asset management
+    - capital market
+    - holding compan
+  default_template: General
+
+peer_group:
+  # Percentiles are ranked within this grouping...
+  field: sector          # companies.sector (yfinance GICS sector)
+  # ...unless the group has fewer than this many stocks, in which case the
+  # whole eligible universe is used instead.
+  min_peers: 8

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python tests/test_monthly_brief.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('dashboard/app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('dashboard parses OK'\\)\")",
+      "Bash(python -c \"from src.agents.monthly_brief import build_brief_dossier, run_monthly_briefs; print\\('monthly_brief imports OK'\\)\")",
+      "Bash(python -X utf8 run_briefs.py --limit 1)",
+      "Bash(python -X utf8 -c ' *)",
+      "Bash(python -c \"import apscheduler; print\\('apscheduler', apscheduler.__version__\\)\")",
+      "Bash(python tests/test_learning.py)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('dashboard/app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('dashboard OK'\\)\")",
+      "Bash(python -c \"from src.scheduler.jobs import run_monthly_pipeline, start_scheduler; from src.learning.loop import review_outcomes, summarise, classify_outcome; print\\('imports OK'\\)\")",
+      "Bash(python -X utf8 run_review.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('dashboard/app.py',encoding='utf-8'\\).read\\(\\)\\); print\\('dashboard OK'\\)\")",
+      "Bash(python -c \"from src.scheduler.jobs import run_monthly_pipeline, start_scheduler; from src.learning.loop import review_outcomes, classify_outcome, summarise; print\\('scheduler + learning imports OK'\\)\")",
+      "Bash(python -m pytest tests/test_company_estimate.py tests/test_company_swing.py tests/test_company_quality.py tests/test_company_resolve.py -q)",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(python -c \"import run_company; from src.company import report, profile, peers, quality, estimate, swing, news, dossier, analyst, resolve; print\\('imports OK'\\)\")",
+      "Bash(python run_company.py RELIANCE --symbol --no-ai)",
+      "Bash(python run_company.py \"Infosys\" --yes --no-ai)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('dashboard/app.py',encoding='utf-8'\\).read\\(\\)\\); print\\('dashboard/app.py parses OK'\\)\")",
+      "Bash(cd \"C:/Users/User/.claude/projects/e--AI-Project-personal-warren/memory\" && test -f MEMORY.md && echo \"exists\" || echo \"missing\")",
+      "Read(//c/Users/User/.claude/projects/e--AI-Project-personal-warren/memory/**)",
+      "Bash(awk 'NR>=405 && NR<=472' AGENTS.md)"
+    ]
+  }
+}
